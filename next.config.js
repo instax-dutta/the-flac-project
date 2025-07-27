@@ -8,12 +8,6 @@ const nextConfig = {
       config.externals.push('@distube/ytdl-core', 'fluent-ffmpeg');
     }
     return config;
-  },
-  api: {
-    bodyParser: {
-      sizeLimit: '100mb',
-    },
-    responseLimit: '100mb',
   }
 }
 

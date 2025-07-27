@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ffmpeg from 'fluent-ffmpeg'
 import { Readable, PassThrough } from 'stream'
-import fetch from 'node-fetch'
+import ytdl from '@distube/ytdl-core'
+
+// Increase the body size limit for API routes
+export const maxDuration = 300; // 5 minutes
+export const dynamic = 'force-dynamic';
 
 // Configure ffmpeg paths for different environments
 if (process.env.VERCEL) {
@@ -21,35 +25,91 @@ if (process.env.VERCEL) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { streamUrl, title, quality, sampleRate } = await request.json()
+    const { url } = await request.json()
 
-    if (!streamUrl) {
-      return NextResponse.json({ error: 'Stream URL is required' }, { status: 400 })
+    if (!url) {
+      return NextResponse.json({ error: 'YouTube URL is required' }, { status: 400 })
     }
 
-    if (!title) {
-      return NextResponse.json({ error: 'Video title is required' }, { status: 400 })
+    // Validate YouTube URL
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/
+    if (!youtubeRegex.test(url)) {
+      return NextResponse.json({ error: 'Please provide a valid YouTube URL' }, { status: 400 })
     }
 
-    console.log('TFP: Processing stream URL for:', title)
-    console.log('TFP: Stream quality:', quality || 'unknown')
+    console.log('TFP: Processing YouTube URL:', url)
 
-    // Fetch audio stream from the provided URL
-    const response = await fetch(streamUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    // Get video info
+    let info;
+    try {
+      info = await ytdl.getInfo(url)
+    } catch (error: any) {
+      console.error('TFP: Failed to get video info:', error.message)
+      
+      if (error.message.includes('Video unavailable')) {
+        return NextResponse.json({ 
+          error: 'Video is unavailable or has been removed',
+          suggestion: 'Please check if the video exists and is publicly accessible'
+        }, { status: 400 })
+      } else if (error.message.includes('private')) {
+        return NextResponse.json({ 
+          error: 'This video is private and cannot be accessed',
+          suggestion: 'Try a different public video'
+        }, { status: 400 })
+      } else if (error.message.includes('Sign in') || error.message.includes('age')) {
+        return NextResponse.json({ 
+          error: 'Video requires sign-in or is age-restricted',
+          suggestion: 'Try a different video that doesn\'t require sign-in or age verification'
+        }, { status: 400 })
+      } else {
+        return NextResponse.json({ 
+          error: 'Failed to access video information',
+          suggestion: 'Please check the YouTube URL and try again'
+        }, { status: 400 })
       }
+    }
+
+    const title = info.videoDetails.title
+    console.log('TFP: Video title:', title)
+
+    // Check if video is accessible
+    if (info.videoDetails.isPrivate) {
+      return NextResponse.json({ 
+        error: 'This video is private and cannot be accessed',
+        suggestion: 'Try a different public video'
+      }, { status: 400 })
+    }
+
+    // Get best audio format
+    const audioFormats = ytdl.filterFormats(info.formats, 'audioonly')
+    
+    if (audioFormats.length === 0) {
+      const allFormats = info.formats.filter(format => format.hasAudio)
+      if (allFormats.length === 0) {
+        return NextResponse.json({ 
+          error: 'No audio streams found for this video',
+          suggestion: 'This might be a video-only content or live stream'
+        }, { status: 400 })
+      }
+    }
+
+    const bestAudio = ytdl.chooseFormat(audioFormats.length > 0 ? audioFormats : info.formats, { 
+      quality: 'highestaudio',
+      filter: 'audioonly'
     })
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch audio stream: ${response.status} ${response.statusText}`)
+    if (!bestAudio) {
+      return NextResponse.json({ 
+        error: 'No suitable audio stream found',
+        suggestion: 'The video may not have compatible audio streams'
+      }, { status: 400 })
     }
 
-    console.log('TFP: Audio stream fetched successfully')
-    console.log('TFP: Starting FLAC conversion...')
+    console.log('TFP: Selected format:', bestAudio.container, '@', bestAudio.audioBitrate || 'unknown', 'kbps')
 
-    // Convert the response stream to FLAC
-    const audioStream = Readable.fromWeb(response.body as any)
+    // Download and convert to FLAC
+    console.log('TFP: Starting download and FLAC conversion...')
+    const audioStream = ytdl(url, { format: bestAudio })
     const flacBuffer = await convertToFlac(audioStream)
 
     console.log('TFP: FLAC conversion completed, size:', Math.round(flacBuffer.length / 1024 / 1024), 'MB')
@@ -62,8 +122,8 @@ export async function POST(request: NextRequest) {
       downloadUrl: dataUrl,
       title: title.replace(/[^\w\s-]/gi, '').trim(),
       format: 'flac',
-      quality: quality || 'Lossless',
-      sampleRate: sampleRate || '44100',
+      quality: bestAudio.audioBitrate || 'Lossless',
+      sampleRate: bestAudio.audioSampleRate || '44100',
       size: flacBuffer.length,
       note: 'TFP Premium FLAC Conversion - True Audiophile Lossless Quality'
     })
@@ -71,13 +131,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('TFP FLAC Conversion error:', error)
     
-    if (error.message.includes('fetch')) {
-      return NextResponse.json(
-        { error: 'Failed to access audio stream - The provided stream URL may be invalid or expired' },
-        { status: 400 }
-      )
-    }
-
     if (error.message.includes('ffmpeg') || error.message.includes('FFmpeg')) {
       return NextResponse.json(
         { error: 'FLAC conversion engine unavailable - Please try again later' },
@@ -145,15 +198,15 @@ function convertToFlac(inputStream: Readable): Promise<Buffer> {
 export async function GET() {
   return NextResponse.json({
     name: 'TFP - The FLAC Project API',
-    version: '3.0.0',
-    description: 'Premium audiophile FLAC converter with client-side YouTube access',
+    version: '4.0.0',
+    description: 'Premium audiophile FLAC converter with server-side YouTube processing',
     environment: process.env.VERCEL ? 'Vercel Serverless' : 'Local Development',
     endpoints: {
-      'POST /api/convert': 'Convert audio stream to authentic FLAC format',
+      'POST /api/convert': 'Convert YouTube URL to authentic FLAC format',
     },
     features: [
-      'Client-side YouTube processing',
-      'Server-side FLAC conversion',
+      'Server-side YouTube processing',
+      'High-quality audio extraction',
       'Maximum compression (level 8)',
       'Audiophile-grade processing',
       '16-bit/44.1kHz standard',
@@ -168,6 +221,6 @@ export async function GET() {
       compression: 'Level 8 (Maximum)',
       quality: 'True Lossless'
     },
-    approach: 'Hybrid client-server architecture for optimal compatibility'
+    approach: 'Server-side processing for maximum compatibility and reliability'
   })
 } 
