@@ -9,6 +9,7 @@ export default function Home() {
   const [downloadUrl, setDownloadUrl] = useState('')
   const [error, setError] = useState('')
   const [videoInfo, setVideoInfo] = useState<any>(null)
+  const [suggestion, setSuggestion] = useState('')
 
   const validateYouTubeUrl = (url: string) => {
     const regex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/
@@ -18,16 +19,19 @@ export default function Home() {
   const handleConvert = async () => {
     if (!url.trim()) {
       setError('Please enter a YouTube URL')
+      setSuggestion('')
       return
     }
 
     if (!validateYouTubeUrl(url)) {
       setError('Please enter a valid YouTube URL')
+      setSuggestion('')
       return
     }
 
     setLoading(true)
     setError('')
+    setSuggestion('')
     setDownloadUrl('')
     setVideoInfo(null)
 
@@ -36,7 +40,11 @@ export default function Home() {
       setDownloadUrl(response.data.downloadUrl)
       setVideoInfo(response.data)
     } catch (err: any) {
-      setError(err.response?.data?.error || 'An error occurred during FLAC processing')
+      const errorMessage = err.response?.data?.error || 'An error occurred during FLAC processing'
+      const suggestionMessage = err.response?.data?.suggestion || ''
+      
+      setError(errorMessage)
+      setSuggestion(suggestionMessage)
     } finally {
       setLoading(false)
     }
@@ -152,10 +160,18 @@ export default function Home() {
             {/* Error Message */}
             {error && (
               <div className="mt-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl backdrop-blur-sm">
-                <div className="flex items-center">
+                <div className="flex items-center mb-2">
                   <span className="text-red-400 mr-2">⚠️</span>
                   <p className="text-red-300 font-mono">{error}</p>
                 </div>
+                {suggestion && (
+                  <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                    <div className="flex items-start">
+                      <span className="text-yellow-400 mr-2 mt-0.5">💡</span>
+                      <p className="text-yellow-200 text-sm">{suggestion}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -209,6 +225,20 @@ export default function Home() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Deployment Notice */}
+          <div className="mb-8 p-4 bg-blue-900/20 border border-blue-500/50 rounded-xl backdrop-blur-sm">
+            <div className="flex items-start">
+              <span className="text-blue-400 mr-3 mt-1">ℹ️</span>
+              <div>
+                <h4 className="text-blue-300 font-semibold mb-2">Server Deployment Notice</h4>
+                <p className="text-blue-200 text-sm">
+                  Some YouTube videos may have access restrictions on server environments that don't apply to browsers. 
+                  If you encounter access errors, try different videos or check if the content is publicly accessible without age restrictions.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Audiophile Features Grid */}

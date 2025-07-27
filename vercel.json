@@ -1,9 +1,10 @@
 {
   "functions": {
     "app/api/convert/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     }
   },
+  "regions": ["cle1", "iad1"],
   "headers": [
     {
       "source": "/api/(.*)",
