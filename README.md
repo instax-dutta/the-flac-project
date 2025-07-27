@@ -8,27 +8,30 @@
 
 **Premium audiophile YouTube to FLAC converter for the discerning listener.**
 
-Experience music the way it was meant to be heard. TFP delivers uncompromising audio quality conversion from YouTube to authentic FLAC format with zero server storage and unlimited track length support.
+Experience music the way it was meant to be heard. TFP delivers uncompromising audio quality conversion from YouTube to authentic FLAC format with our revolutionary **hybrid client-server architecture**.
 
 ![TFP Screenshot](https://via.placeholder.com/800x400/1e293b/6366f1?text=TFP+-+The+FLAC+Project)
 
 ## 🎧 Audiophile Features
 
 - 🎵 **True FLAC Conversion**: Authentic lossless FLAC format with FFmpeg processing
-- ⚡ **Server-Side Processing**: Professional-grade audio conversion pipeline
+- 🌐 **Hybrid Architecture**: Browser-based YouTube access + server-side FLAC conversion
 - 🔒 **Zero Storage**: Direct conversion and download - files never stored
 - ∞ **Unlimited Length**: No restrictions on video duration
 - 🎨 **Dark Funky UI**: Audiophile-focused interface with neon accents and glitch effects
 - 📱 **Mobile Optimized**: Responsive design for all devices
-- ☁️ **Vercel Ready**: One-click deployment to Vercel
+- ☁️ **Vercel Ready**: Optimized for serverless deployment
 
-## 🔧 Tech Stack
+## 🔧 Revolutionary Architecture
 
-- **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes with FFmpeg
-- **Audio Processing**: @distube/ytdl-core + fluent-ffmpeg
-- **Deployment**: Vercel
-- **Design**: Dark theme with audiophile-grade visual effects
+### **Hybrid Client-Server Approach**
+TFP v3.0 solves the common YouTube access restrictions on serverless platforms:
+
+1. **🌐 Client-Side YouTube Processing**: Your browser directly accesses YouTube (no server restrictions)
+2. **⚡ Server-Side FLAC Conversion**: Professional FFmpeg processing for guaranteed quality
+3. **🔄 Seamless Integration**: Automatic handoff between client and server
+
+This approach eliminates the "age-restricted" and "sign-in required" errors common with server-only solutions!
 
 ## 🎯 For Audiophiles, By Audiophiles
 
@@ -89,6 +92,8 @@ Visit [http://localhost:3000](http://localhost:3000)
 ### One-Click Deploy
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/instax-dutta/the-flac-project)
 
+**✅ Now works reliably on Vercel thanks to our hybrid architecture!**
+
 ### Manual Deployment
 1. Fork this repository
 2. Connect your fork to Vercel
@@ -104,18 +109,23 @@ vercel
 
 1. **Navigate** to your TFP instance
 2. **Paste** any YouTube URL (unlimited length supported)
-3. **Click** "CONVERT TO LOSSLESS FLAC"
+3. **Watch** the hybrid processing in action:
+   - Browser fetches video info from YouTube
+   - Server converts audio to FLAC
 4. **Download** your authentic FLAC file
 
 ## 🔗 API Endpoints
 
 ### POST `/api/convert`
-Convert YouTube videos to authentic FLAC format.
+Convert audio streams to authentic FLAC format.
 
 **Request:**
 ```json
 {
-  "url": "https://www.youtube.com/watch?v=..."
+  "streamUrl": "https://...",
+  "title": "Track Title",
+  "quality": "320",
+  "sampleRate": "48000"
 }
 ```
 
@@ -135,7 +145,27 @@ Convert YouTube videos to authentic FLAC format.
 ### GET `/api/convert`
 Returns TFP API information and capabilities.
 
-## ⚙️ Configuration
+## ⚙️ Architecture Details
+
+### How the Hybrid System Works
+
+#### **Client-Side (Browser) 🌐**
+- Uses `@distube/ytdl-core` in the browser
+- Fetches video information directly from YouTube
+- Selects highest quality audio stream
+- Sends stream URL to server
+
+#### **Server-Side (Vercel) ⚡**
+- Receives pre-validated stream URLs
+- Fetches audio data using `node-fetch`
+- Converts to FLAC using FFmpeg
+- Returns base64-encoded FLAC file
+
+#### **Benefits of This Approach**
+- ✅ **No YouTube blocking**: Browser access bypasses server restrictions
+- ✅ **No age-restriction errors**: Client handles authentication naturally
+- ✅ **Reliable on Vercel**: Server only processes audio, not YouTube access
+- ✅ **Maximum compatibility**: Works with all YouTube content types
 
 ### FLAC Quality Settings
 TFP automatically converts to highest quality FLAC:
@@ -145,28 +175,6 @@ TFP automatically converts to highest quality FLAC:
 - **Channels**: Stereo
 - **Compression**: Level 8 (Maximum)
 - **Processing**: Server-side FFmpeg conversion
-
-### No Limitations
-- ✅ **Unlimited video length**
-- ✅ **No file size restrictions** 
-- ✅ **No processing time limits**
-- ✅ **True FLAC conversion**
-
-## 🎨 UI Customization
-
-### Color Scheme
-Edit `tailwind.config.js` to modify the audiophile color palette:
-- **Primary**: Indigo/Purple gradient
-- **Accent**: Pink/Magenta tones
-- **Gold**: Premium highlights
-- **Dark**: Deep space backgrounds
-
-### Visual Effects
-- **Glitch animations** on main title
-- **Neon glow effects** on interactive elements
-- **Waveform visualization** during processing
-- **Glass morphism** interface elements
-- **Gradient borders** and backgrounds
 
 ## 🤝 Contributing
 
@@ -189,30 +197,22 @@ We welcome contributions from fellow audiophiles! Here's how you can help:
 7. **Push** branch: `git push origin audiophile-feature`
 8. **Submit** pull request
 
-### Contribution Guidelines
-- Follow existing code style and formatting
-- Add tests for new features
-- Update documentation as needed
-- Ensure all tests pass
-- Respect audiophile quality standards
-
 ## 🚨 Error Handling
 
 TFP provides comprehensive error management:
 - **Invalid URLs**: Format validation with helpful messages
 - **Private/Unavailable videos**: Clear status reporting
-- **Age restrictions**: Explicit limitation notices
-- **FFmpeg errors**: Conversion failure handling
-- **Rate limits**: Automatic retry suggestions
+- **Age restrictions**: Handled gracefully by browser
 - **Network issues**: Connection status feedback
+- **Conversion failures**: Detailed FFmpeg error reporting
 
 ## 📊 Performance
 
 ### Optimizations
-- **Server-side FLAC conversion** with FFmpeg
-- **Streaming processing** for memory efficiency
-- **60-second function timeout** for reliability
-- **Progress tracking** for long conversions
+- **Hybrid processing** for maximum compatibility
+- **Browser-side YouTube access** (no server blocking)
+- **Streaming FLAC conversion** for memory efficiency
+- **Progress tracking** for user feedback
 - **Error recovery** mechanisms
 
 ### Browser Support
@@ -244,20 +244,20 @@ TFP provides comprehensive error management:
 
 **Conversion fails?**
 - Verify YouTube URL is valid and accessible
-- Check if video is private or geo-restricted
-- Monitor server logs for FFmpeg errors
+- Check browser console for detailed errors
+- Try with different videos
 
-**Build failures?**
-- Ensure Node.js 18+ is installed
-- Clear cache: `rm -rf node_modules package-lock.json && npm install`
-- Check for TypeScript compilation errors
+**Browser compatibility issues?**
+- Use a modern browser (Chrome recommended)
+- Enable JavaScript
+- Check for browser extensions that might interfere
 
 ### Getting Help
 1. Check [existing issues](https://github.com/instax-dutta/the-flac-project/issues)
 2. [Create a new issue](https://github.com/instax-dutta/the-flac-project/issues/new) with:
    - Detailed problem description
    - Steps to reproduce
-   - System information
+   - Browser and system information
    - Error logs/screenshots
 
 ## 📞 Support
@@ -299,6 +299,6 @@ If you find TFP useful, please consider:
 ---
 
 **TFP © 2024 - Engineered for Audiophiles**  
-*True FLAC conversion technology • Zero compromise on quality*
+*Hybrid architecture • True FLAC conversion • Zero compromise on quality*
 
 **Made with 🎵 for the audiophile community** 

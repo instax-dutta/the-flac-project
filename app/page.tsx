@@ -10,6 +10,7 @@ export default function Home() {
   const [error, setError] = useState('')
   const [videoInfo, setVideoInfo] = useState<any>(null)
   const [suggestion, setSuggestion] = useState('')
+  const [processingStep, setProcessingStep] = useState('')
 
   const validateYouTubeUrl = (url: string) => {
     const regex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/
@@ -34,15 +35,86 @@ export default function Home() {
     setSuggestion('')
     setDownloadUrl('')
     setVideoInfo(null)
+    setProcessingStep('Initializing YouTube processing...')
 
     try {
-      const response = await axios.post('/api/convert', { url })
+      // Dynamically import ytdl-core for client-side use
+      setProcessingStep('Loading YouTube processor...')
+      const ytdl = (await import('@distube/ytdl-core')).default
+
+      // Get video info from client-side (browser)
+      setProcessingStep('Fetching video information...')
+      const info = await ytdl.getInfo(url)
+      
+      const title = info.videoDetails.title
+      console.log('TFP Client: Video title:', title)
+
+      // Check if video is accessible
+      if (info.videoDetails.isPrivate) {
+        throw new Error('This video is private and cannot be accessed')
+      }
+
+      // Get best audio format
+      setProcessingStep('Analyzing audio formats...')
+      const audioFormats = ytdl.filterFormats(info.formats, 'audioonly')
+      
+      if (audioFormats.length === 0) {
+        const allFormats = info.formats.filter(format => format.hasAudio)
+        if (allFormats.length === 0) {
+          throw new Error('No audio streams found for this video')
+        }
+      }
+
+      const bestAudio = ytdl.chooseFormat(audioFormats.length > 0 ? audioFormats : info.formats, { 
+        quality: 'highestaudio',
+        filter: 'audioonly'
+      })
+
+      if (!bestAudio) {
+        throw new Error('No suitable audio stream found')
+      }
+
+      console.log('TFP Client: Selected format:', bestAudio.container, '@', bestAudio.audioBitrate || 'unknown', 'kbps')
+
+      // Send stream info to server for FLAC conversion
+      setProcessingStep('Starting server-side FLAC conversion...')
+      const response = await axios.post('/api/convert', {
+        streamUrl: bestAudio.url,
+        title: title,
+        quality: bestAudio.audioBitrate,
+        sampleRate: bestAudio.audioSampleRate
+      })
+
       setDownloadUrl(response.data.downloadUrl)
       setVideoInfo(response.data)
+      setProcessingStep('')
+
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'An error occurred during FLAC processing'
-      const suggestionMessage = err.response?.data?.suggestion || ''
+      console.error('TFP Error:', err)
+      setProcessingStep('')
       
+      let errorMessage = 'An error occurred during processing'
+      let suggestionMessage = ''
+
+      if (err.message.includes('Video unavailable')) {
+        errorMessage = 'Video is unavailable or has been removed'
+        suggestionMessage = 'Please check if the video exists and is publicly accessible'
+      } else if (err.message.includes('private')) {
+        errorMessage = 'This video is private and cannot be accessed'
+        suggestionMessage = 'Try a different public video'
+      } else if (err.message.includes('Sign in') || err.message.includes('age')) {
+        errorMessage = 'Video requires sign-in or is age-restricted'
+        suggestionMessage = 'Try a different video that doesn\'t require sign-in or age verification'
+      } else if (err.message.includes('No audio')) {
+        errorMessage = 'No audio streams found for this video'
+        suggestionMessage = 'This might be a video-only content or live stream'
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error
+        suggestionMessage = err.response.data.suggestion || ''
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
       setError(errorMessage)
       setSuggestion(suggestionMessage)
     } finally {
@@ -138,6 +210,16 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Processing Step Display */}
+            {loading && processingStep && (
+              <div className="mb-6 p-4 bg-blue-900/20 border border-blue-500/50 rounded-xl backdrop-blur-sm">
+                <div className="flex items-center">
+                  <div className="loading-spinner mr-3"></div>
+                  <p className="text-blue-300 font-mono text-sm">{processingStep}</p>
+                </div>
+              </div>
+            )}
+
             {/* Convert Button */}
             <button
               onClick={handleConvert}
@@ -147,7 +229,7 @@ export default function Home() {
               {loading ? (
                 <>
                   <div className="loading-spinner mr-4"></div>
-                  <span>CONVERTING TO FLAC...</span>
+                  <span>PROCESSING...</span>
                 </>
               ) : (
                 <>
@@ -227,15 +309,15 @@ export default function Home() {
             )}
           </div>
 
-          {/* Deployment Notice */}
-          <div className="mb-8 p-4 bg-blue-900/20 border border-blue-500/50 rounded-xl backdrop-blur-sm">
+          {/* Architecture Notice */}
+          <div className="mb-8 p-4 bg-emerald-900/20 border border-emerald-500/50 rounded-xl backdrop-blur-sm">
             <div className="flex items-start">
-              <span className="text-blue-400 mr-3 mt-1">ℹ️</span>
+              <span className="text-emerald-400 mr-3 mt-1">🔧</span>
               <div>
-                <h4 className="text-blue-300 font-semibold mb-2">Server Deployment Notice</h4>
-                <p className="text-blue-200 text-sm">
-                  Some YouTube videos may have access restrictions on server environments that don't apply to browsers. 
-                  If you encounter access errors, try different videos or check if the content is publicly accessible without age restrictions.
+                <h4 className="text-emerald-300 font-semibold mb-2">Hybrid Client-Server Architecture</h4>
+                <p className="text-emerald-200 text-sm">
+                  TFP now uses your browser to access YouTube directly, avoiding server-side restrictions. 
+                  The server handles only the high-quality FLAC conversion process.
                 </p>
               </div>
             </div>
@@ -253,10 +335,10 @@ export default function Home() {
             
             <div className="glass-morphism p-6 rounded-xl text-center hover:scale-105 transition-transform duration-300">
               <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-accent-500 to-accent-700 rounded-full flex items-center justify-center">
-                <span className="text-2xl">⚡</span>
+                <span className="text-2xl">🌐</span>
               </div>
-              <h3 className="font-bold text-lg mb-2 text-accent-300 font-mono">SERVER CONVERSION</h3>
-              <p className="text-gray-400 text-sm">Professional FFmpeg processing for guaranteed quality</p>
+              <h3 className="font-bold text-lg mb-2 text-accent-300 font-mono">CLIENT-SIDE ACCESS</h3>
+              <p className="text-gray-400 text-sm">Browser-based YouTube processing for maximum compatibility</p>
             </div>
             
             <div className="glass-morphism p-6 rounded-xl text-center hover:scale-105 transition-transform duration-300">
@@ -296,7 +378,7 @@ export default function Home() {
           {/* Footer */}
           <div className="text-center text-gray-500 font-mono text-sm">
             <p className="mb-2">TFP © 2024 - Engineered for Audiophiles</p>
-            <p className="text-xs">True FLAC conversion technology • Zero compromise on quality</p>
+            <p className="text-xs">Hybrid architecture • True FLAC conversion • Zero compromise on quality</p>
           </div>
         </div>
       </div>
